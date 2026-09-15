@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>מעקב הכנסות והוצאות חודשי</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #F6F2E9;
+    --surface: #FFFFFF;
+    --ink: #2A2620;
+    --muted: #8A8272;
+    --faint: #B7AF9E;
+    --line: #EAE3D3;
+    --line-soft: #F0EBDE;
+    --dash: #DDD5C4;
+    --income: #3F6C51;
+    --fixed: #4A4438;
+    --variable: #8C3B2E;
+    --savings: #B08D57;
+    --debt: #6B2E2E;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: 'Heebo', sans-serif; }
+  #app { max-width: 640px; margin: 0 auto; padding: 28px 18px 60px; min-height: 100vh; }
+
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .signin-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; text-align: center; gap: 16px; }
+  .signin-title { font-size: 22px; font-weight: 700; }
+  .signin-sub { font-size: 13.5px; color: var(--muted); max-width: 380px; line-height: 1.6; }
+  .gbtn { display: flex; align-items: center; gap: 10px; background: #2A2620; color: #F6F2E9; border: none; border-radius: 10px; padding: 12px 20px; font-family: 'Heebo', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .gbtn:hover { background: #3A342A; }
+  .gbtn:disabled { opacity: 0.6; cursor: default; }
+  .error-box { display: flex; align-items: center; gap: 8px; background: #F6E4DF; color: var(--debt); border: 1px solid #E3B9AC; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-top: 10px; max-width: 420px; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; gap: 10px; }
+  .eyebrow { font-size: 12px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.02em; }
+  .month-input { font-family: 'Heebo', sans-serif; font-weight: 700; background: transparent; border: none; outline: none; color: var(--ink); font-size: 22px; border-bottom: 1px dashed var(--dash); padding-bottom: 2px; width: 100%; }
+  .header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .save-btn { display: flex; align-items: center; gap: 6px; background: var(--income); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-family: 'Heebo', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .save-btn:hover { background: #345C43; }
+  .save-indicator { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); height: 14px; }
+  .account-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--faint); margin-bottom: 14px; }
+  .signout-link { background: none; border: none; color: var(--muted); font-size: 11.5px; text-decoration: underline; cursor: pointer; padding: 0; font-family: 'Heebo', sans-serif; }
+
+  .month-bar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .ghost-btn { display: flex; align-items: center; gap: 6px; background: #EFE9DA; border: none; border-radius: 8px; padding: 7px 12px; font-size: 12.5px; color: var(--fixed); cursor: pointer; font-family: 'Heebo', sans-serif; }
+  .ghost-btn:hover { background: #E5DEC9; }
+  .new-month-box { display: flex; gap: 8px; margin-bottom: 4px; }
+  .new-month-hint { font-size: 11.5px; color: var(--faint); margin-bottom: 14px; }
+  .sel-input { font-family: 'Heebo', sans-serif; font-size: 13px; color: var(--ink); background: #FBF8F2; border: 1px solid var(--dash); border-radius: 6px; padding: 6px 8px; outline: none; }
+  .sel-input:focus { border-color: var(--fixed); }
+  .btn-sm-confirm { background: var(--income); color: #fff; border: none; border-radius: 6px; padding: 0 14px; font-size: 12.5px; cursor: pointer; font-family: 'Heebo', sans-serif; font-weight: 600; }
+  .btn-sm-cancel { background: none; border: 1px solid var(--dash); border-radius: 6px; padding: 0 12px; font-size: 12.5px; cursor: pointer; color: var(--muted); font-family: 'Heebo', sans-serif; }
+
+  .history-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px; margin-bottom: 16px; }
+  .history-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 10px; border-radius: 7px; cursor: pointer; }
+  .history-row:hover { background: var(--bg); }
+  .history-row.active { background: #F1EBD9; }
+  .history-label { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .history-badge { font-size: 10px; background: var(--income); color: #fff; border-radius: 10px; padding: 1px 7px; font-weight: 600; }
+  .history-nums { display: flex; gap: 12px; font-size: 12.5px; font-family: 'IBM Plex Mono', monospace; direction: ltr; }
+  .history-legend { text-align: left; font-size: 10.5px; color: var(--faint); padding: 4px 10px 2px; direction: ltr; }
+
+  .overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-block { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 12px; }
+  .stat-block.emph { background: #2A2620; border-color: #2A2620; }
+  .stat-label { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+  .stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 19px; font-weight: 600; direction: ltr; text-align: right; }
+
+  .import-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; background: #2A2620; color: #F6F2E9; border: none; border-radius: 10px; padding: 12px 14px; font-family: 'Heebo', sans-serif; font-size: 13.5px; cursor: pointer; margin-bottom: 18px; }
+  .import-btn:hover { background: #3A342A; }
+  .import-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .section { background: var(--surface); border: 1px solid var(--line); border-inline-start: 3px solid; border-radius: 10px; padding: 14px 16px 10px; margin-bottom: 14px; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .section-title-row { display: flex; align-items: center; gap: 8px; }
+  .section-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .section-title { font-weight: 600; font-size: 14.5px; }
+  .section-total { font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+  .col-labels { display: flex; font-size: 11px; color: var(--faint); padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); margin-bottom: 2px; }
+  .col-labels .item-col { flex: 1; }
+  .col-labels .num-col { width: 76px; text-align: left; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+  .row:hover .del-btn { opacity: 1; }
+  .name-input, .num-input { font-family: 'IBM Plex Mono', monospace; background: transparent; border: none; border-bottom: 1px solid transparent; outline: none; width: 100%; padding: 2px 0; font-size: 14px; color: var(--ink); }
+  .name-input { font-family: 'Heebo', sans-serif; text-align: right; direction: rtl; flex: 1; }
+  .num-input { text-align: left; direction: ltr; width: 76px; }
+  .name-input:hover, .num-input:hover { border-bottom-color: var(--dash); }
+  .name-input:focus, .num-input:focus { border-bottom-color: var(--fixed); }
+  .name-input::placeholder { color: var(--faint); }
+  .del-btn { opacity: 0; background: none; border: none; cursor: pointer; width: 22px; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--faint); font-size: 15px; }
+  .add-btn { display: flex; align-items: center; gap: 6px; background: none; border: none; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 13px; cursor: pointer; padding: 8px 6px; border-radius: 6px; margin-top: 4px; width: 100%; justify-content: center; }
+  .add-btn:hover { background: #EFE9DA; }
+
+  .footer-note { text-align: center; font-size: 11.5px; color: var(--faint); margin-top: 18px; line-height: 1.6; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(42,38,32,0.45); display: flex; align-items: flex-start; justify-content: center; padding: 24px 14px; z-index: 50; overflow-y: auto; }
+  .modal { background: #FBF8F2; border-radius: 14px; max-width: 560px; width: 100%; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-size: 17px; font-weight: 700; }
+  .modal-sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; margin-bottom: 10px; font-family: 'IBM Plex Mono', monospace; }
+  .close-btn { background: none; border: none; cursor: pointer; color: inherit; font-size: 16px; }
+  .needs-attention { display: inline-flex; align-items: center; gap: 6px; background: #FBEFD9; color: #8A6A1F; border: 1px solid #E9D6A6; border-radius: 20px; padding: 4px 10px; font-size: 12px; margin-bottom: 14px; }
+  .mode-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+  .mode-label { font-size: 12.5px; color: var(--muted); }
+  .mode-toggle { display: flex; background: #EFE9DA; border-radius: 8px; padding: 3px; }
+  .mode-btn { border: none; background: none; font-size: 12.5px; padding: 6px 10px; border-radius: 6px; color: var(--muted); font-family: 'Heebo', sans-serif; cursor: pointer; }
+  .mode-btn.active { background: #fff; color: var(--ink); font-weight: 600; }
+  .map-list { max-height: 44vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-left: 2px; }
+  .map-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .map-cat-col { flex: 0 0 42%; min-width: 0; }
+  .map-cat-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+  .known-icon { color: var(--savings); flex-shrink: 0; }
+  .map-cat-sum { font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+  .map-select-col { flex: 1; }
+  .cat-select { font-family: 'Heebo', sans-serif; font-size: 13px; color: var(--ink); background: #FBF8F2; border: 1px solid var(--dash); border-radius: 6px; padding: 6px 8px; outline: none; width: 100%; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .btn-cancel { background: none; border: 1px solid var(--dash); border-radius: 8px; padding: 9px 16px; font-size: 13px; cursor: pointer; color: var(--muted); font-family: 'Heebo', sans-serif; }
+  .btn-confirm { background: var(--income); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; cursor: pointer; font-family: 'Heebo', sans-serif; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" style="display:none" />
+
+<script>
+/* =========================================================================
+   SETUP: paste your Google OAuth Client ID here (see the setup steps).
+   ========================================================================= */
+const CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com";
+const SCOPES = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_FILE_NAME = "budget-tracker-data.json";
+
+const SECTION_META = {
+  income:   { title: "הכנסות",           accent: "var(--income)",  itemLabel: "הכנסה"  },
+  fixed:    { title: "חשבונות ומנויים",   accent: "var(--fixed)",   itemLabel: "חשבונית" },
+  variable: { title: "הוצאות משתנות",     accent: "var(--variable)",itemLabel: "הוצאה"  },
+  savings:  { title: "תוכניות חיסכון",    accent: "var(--savings)", itemLabel: "סעיף"   },
+  debt:     { title: "חובות",             accent: "var(--debt)",    itemLabel: "סעיף"   },
+};
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function seedSections() {
+  return {
+    income: [
+      { id: uid(), name: "משכורת", amount: 0 },
+    ],
+    fixed: [
+      { id: uid(), name: "שכירות", amount: 0 },
+      { id: uid(), name: "ארנונה", amount: 0 },
+      { id: uid(), name: "חשמל", amount: 0 },
+      { id: uid(), name: "מים", amount: 0 },
+      { id: uid(), name: "אינטרנט", amount: 0 },
+    ],
+    variable: [
+      { id: uid(), name: "סופר", amount: 0 },
+      { id: uid(), name: "דלק", amount: 0 },
+    ],
+    savings: [{ id: uid(), name: "חיסכון", amount: 0 }],
+    debt: [{ id: uid(), name: "הלוואות", amount: 0 }],
+  };
+}
+
+function emptyLikeSections(sections) {
+  const out = {};
+  Object.keys(SECTION_META).forEach((key) => {
+    out[key] = (sections[key] || []).map((it) => ({ id: uid(), name: it.name, amount: 0 }));
+  });
+  return out;
+}
+
+function fmt(n) { return (Number(n) || 0).toLocaleString("he-IL"); }
+
+function sectionTotal(items) {
+  return (items || []).reduce((s, it) => s + (Number(it.amount) || 0), 0);
+}
+
+function monthTotals(month) {
+  if (!month) return { income: 0, outflow: 0, remaining: 0 };
+  const income = sectionTotal(month.sections.income);
+  const outflow = ["fixed", "variable", "savings", "debt"].reduce((s, k) => s + sectionTotal(month.sections[k]), 0);
+  return { income, outflow, remaining: income - outflow };
+}
+
+function flatItems(sections) {
+  const out = [];
+  Object.entries(SECTION_META).forEach(([key, meta]) => {
+    (sections[key] || []).forEach((it) => out.push({ id: it.id, name: it.name || "(ללא שם)", sectionKey: key, sectionTitle: meta.title }));
+  });
+  return out;
+}
+
+function normalizeHeader(cell) { return (cell === null || cell === undefined ? "" : String(cell)).replace(/\s+/g, ""); }
+
+function parseStatement(workbook) {
+  for (const sheetName of workbook.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: null });
+    const headerRowIdx = rows.findIndex((r) => Array.isArray(r) && r.some((c) => normalizeHeader(c).includes("ביתעסק")));
+    if (headerRowIdx === -1) continue;
+    const header = rows[headerRowIdx].map(normalizeHeader);
+    const merchantCol = header.findIndex((h) => h.includes("ביתעסק"));
+    let amountCol = header.findIndex((h) => h.includes("סכוםחיוב"));
+    if (amountCol === -1) amountCol = header.findIndex((h) => h.includes("סכום"));
+    if (merchantCol === -1 || amountCol === -1) continue;
+
+    const merchants = {};
+    let txCount = 0;
+    for (let r = headerRowIdx + 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row) continue;
+      const merchantRaw = row[merchantCol];
+      if (!merchantRaw) continue;
+      const merchant = String(merchantRaw).trim();
+      if (!merchant) continue;
+      const amount = Number(row[amountCol]);
+      if (!amount || Number.isNaN(amount)) continue;
+      if (!merchants[merchant]) merchants[merchant] = { total: 0, count: 0 };
+      merchants[merchant].total += amount;
+      merchants[merchant].count += 1;
+      txCount += 1;
+    }
+    if (txCount > 0) return { merchants, txCount };
+  }
+  return null;
+}
+
+/* ========================= Google Drive storage ========================= */
+
+let accessToken = null;
+let tokenClient = null;
+let driveFileId = null;
+
+function gisReady() { return typeof google !== "undefined" && google.accounts && google.accounts.oauth2; }
+
+function initTokenClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: async (resp) => {
+      if (resp.error) { app.authError = "ההתחברות נכשלה. נסו שוב."; render(); return; }
+      accessToken = resp.access_token;
+      await loadFromDrive();
+    },
+  });
+}
+
+function driveHeaders(extra) {
+  return Object.assign({ Authorization: "Bearer " + accessToken }, extra || {});
+}
+
+async function driveFindFile() {
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)`, { headers: driveHeaders() });
+  if (!res.ok) throw new Error("drive-list-failed");
+  const data = await res.json();
+  return (data.files && data.files[0]) || null;
+}
+
+async function driveGetContent(fileId) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, { headers: driveHeaders() });
+  if (!res.ok) throw new Error("drive-get-failed");
+  return res.json();
+}
+
+async function driveCreateFile(content) {
+  const metadata = { name: DRIVE_FILE_NAME, mimeType: "application/json" };
+  const boundary = "budget_tracker_boundary_xyz";
+  const delimiter = "\r\n--" + boundary + "\r\n";
+  const closeDelim = "\r\n--" + boundary + "--";
+  const body =
+    delimiter + "Content-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) +
+    delimiter + "Content-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(content) +
+    closeDelim;
+  const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+    method: "POST",
+    headers: driveHeaders({ "Content-Type": `multipart/related; boundary="${boundary}"` }),
+    body,
+  });
+  if (!res.ok) throw new Error("drive-create-failed");
+  const data = await res.json();
+  return data.id;
+}
+
+async function driveUpdateFile(fileId, content) {
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    method: "PATCH",
+    headers: driveHeaders({ "Content-Type": "application/json; charset=UTF-8" }),
+    body: JSON.stringify(content),
+  });
+  if (!res.ok) throw new Error("drive-update-failed");
+}
+
+async function loadFromDrive() {
+  app.loading = true; render();
+  try {
+    const existing = await driveFindFile();
+    if (existing) {
+      driveFileId = existing.id;
+      const content = await driveGetContent(existing.id);
+      app.state = content && content.months ? content : defaultState();
+    } else {
+      app.state = defaultState();
+      driveFileId = await driveCreateFile(app.state);
+    }
+    app.signedIn = true;
+    app.loading = false;
+    app.authError = null;
+    render();
+  } catch (e) {
+    app.loading = false;
+    app.authError = "לא הצלחתי לגשת ל-Drive. ודאו שה-Client ID מוגדר נכון ושהכתובת הזו רשומה כ-Authorized JavaScript origin, ונסו שוב.";
+    render();
+  }
+}
+
+function defaultState() {
+  const seed = { id: uid(), monthLabel: "החודש הראשון", sections: seedSections(), createdAt: Date.now() };
+  return { currentMonthId: seed.id, months: { [seed.id]: seed }, merchantMap: {} };
+}
+
+let saveTimer = null;
+function persist() {
+  app.saveState = "saving"; render();
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await driveUpdateFile(driveFileId, app.state);
+      app.lastSavedAt = Date.now();
+      app.saveState = "saved"; render();
+      setTimeout(() => { if (app.saveState === "saved") { app.saveState = "idle"; render(); } }, 1500);
+    } catch (e) {
+      app.saveState = "idle"; render();
+    }
+  }, 700);
+}
+
+async function saveNow() {
+  if (saveTimer) clearTimeout(saveTimer);
+  app.saveState = "saving"; render();
+  try {
+    await driveUpdateFile(driveFileId, app.state);
+    app.lastSavedAt = Date.now();
+    app.saveState = "saved"; render();
+    setTimeout(() => { if (app.saveState === "saved") { app.saveState = "idle"; render(); } }, 1800);
+  } catch (e) {
+    app.saveState = "idle"; render();
+  }
+}
+
+/* ============================== App state ================================ */
+
+const app = {
+  signedIn: false,
+  loading: false,
+  authError: null,
+  state: null,
+  saveState: "idle",
+  lastSavedAt: null,
+  showHistory: false,
+  showNewMonth: false,
+  newMonthLabel: "",
+  importState: null,
+  importing: false,
+};
+
+function currentMonth() { return app.state.months[app.state.currentMonthId]; }
+
+function updateMonth(updater) {
+  const cur = currentMonth();
+  const next = updater(cur);
+  app.state.months[app.state.currentMonthId] = next;
+  persist();
+  render();
+}
+
+function setMonthLabel(v) { updateMonth((m) => ({ ...m, monthLabel: v })); }
+
+function updateItem(sectionKey, itemId, field, value) {
+  updateMonth((m) => ({
+    ...m,
+    sections: { ...m.sections, [sectionKey]: m.sections[sectionKey].map((it) => (it.id === itemId ? { ...it, [field]: value } : it)) },
+  }));
+}
+
+function addItem(sectionKey) {
+  updateMonth((m) => ({ ...m, sections: { ...m.sections, [sectionKey]: [...m.sections[sectionKey], { id: uid(), name: "", amount: 0 }] } }));
+}
+
+function removeItem(sectionKey, itemId) {
+  updateMonth((m) => ({ ...m, sections: { ...m.sections, [sectionKey]: m.sections[sectionKey].filter((it) => it.id !== itemId) } }));
+}
+
+async function switchMonth(id) {
+  if (!id || id === app.state.currentMonthId) return;
+  try { await driveUpdateFile(driveFileId, app.state); } catch (e) {}
+  app.state.currentMonthId = id;
+  app.showHistory = false;
+  persist(); render();
+}
+
+async function createNewMonth() {
+  const label = app.newMonthLabel.trim() || "חודש חדש";
+  const template = currentMonth();
+  const newMonth = { id: uid(), monthLabel: label, sections: template ? emptyLikeSections(template.sections) : seedSections(), createdAt: Date.now() };
+  app.state.months[newMonth.id] = newMonth;
+  app.state.currentMonthId = newMonth.id;
+  app.showNewMonth = false;
+  app.newMonthLabel = "";
+  app.showHistory = false;
+  persist(); render();
+}
+
+/* ============================== Import flow =============================== */
+
+async function onFileSelected(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  app.importing = true; render();
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const result = parseStatement(wb);
+    if (!result) {
+      app.importState = { error: "לא הצלחתי לזהות טבלת עסקאות בקובץ. ודאו שזה קובץ פירוט חיובים מחברת האשראי." };
+      app.importing = false; render(); return;
+    }
+    const items = flatItems(currentMonth().sections);
+    const mapping = {};
+    Object.keys(result.merchants).forEach((merchant) => {
+      const remembered = app.state.merchantMap[merchant];
+      if (remembered && remembered.ignored) mapping[merchant] = "ignore";
+      else if (remembered && remembered.itemName) {
+        const found = items.find((it) => it.name === remembered.itemName && (!remembered.sectionKey || it.sectionKey === remembered.sectionKey));
+        mapping[merchant] = found ? found.id : "";
+      } else mapping[merchant] = "";
+    });
+    app.importState = { fileName: file.name, merchants: result.merchants, txCount: result.txCount, mapping, mode: "add", error: null };
+  } catch (err) {
+    app.importState = { error: "לא הצלחתי לקרוא את הקובץ. נסו לייצא אותו מחדש מאתר חברת האשראי." };
+  } finally {
+    app.importing = false; render();
+  }
+}
+
+function setMapping(merchant, value) { app.importState.mapping[merchant] = value; render(); }
+function setImportMode(mode) { app.importState.mode = mode; render(); }
+function cancelImport() { app.importState = null; render(); }
+
+function confirmImport() {
+  const { merchants, mapping, mode } = app.importState;
+  updateMonth((prev) => {
+    const next = { ...prev, sections: { ...prev.sections } };
+    Object.keys(next.sections).forEach((k) => { next.sections[k] = next.sections[k].map((it) => ({ ...it })); });
+
+    const itemAdd = {};
+    const resolvedMap = {};
+    Object.entries(mapping).forEach(([merchant, value]) => {
+      const amount = (merchants[merchant] && merchants[merchant].total) || 0;
+      if (!value || value === "ignore") { resolvedMap[merchant] = { ignored: true }; return; }
+      if (value.startsWith("new:")) {
+        const sectionKey = value.split(":")[1];
+        const newItem = { id: uid(), name: merchant, amount: 0 };
+        next.sections[sectionKey] = [...next.sections[sectionKey], newItem];
+        itemAdd[newItem.id] = (itemAdd[newItem.id] || 0) + amount;
+        resolvedMap[merchant] = { sectionKey, itemName: newItem.name };
+      } else {
+        itemAdd[value] = (itemAdd[value] || 0) + amount;
+        let itemName = value, itemSectionKey = null;
+        Object.keys(next.sections).forEach((k) => {
+          const found = next.sections[k].find((it) => it.id === value);
+          if (found) { itemName = found.name; itemSectionKey = k; }
+        });
+        resolvedMap[merchant] = { sectionKey: itemSectionKey, itemName };
+      }
+    });
+
+    Object.entries(itemAdd).forEach(([itemId, addAmount]) => {
+      Object.keys(next.sections).forEach((k) => {
+        next.sections[k] = next.sections[k].map((it) => {
+          if (it.id !== itemId) return it;
+          const base = mode === "add" ? Number(it.amount) || 0 : 0;
+          return { ...it, amount: Math.round((base + addAmount) * 100) / 100 };
+        });
+      });
+    });
+
+    app.state.merchantMap = { ...app.state.merchantMap, ...resolvedMap };
+    return next;
+  });
+  app.importState = null;
+  render();
+}
+
+/* ================================ Rendering ================================ */
+
+function iconSvg(name, size) {
+  size = size || 14;
+  const icons = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    x: '<path d="M18 6 6 18M6 6l18 12"/>'.replace("18 12","18 18"),
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+    chevron: '<path d="M6 9l6 6 6-6"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+    sparkles: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+    history: '<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>',
+    calplus: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"/>',
+  };
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name] || ""}</svg>`;
+}
+
+function render() {
+  const root = document.getElementById("app");
+
+  if (app.authError && !app.signedIn) {
+    root.innerHTML = `
+      <div class="signin-screen">
+        <div class="signin-title">מעקב הכנסות והוצאות חודשי</div>
+        <div class="signin-sub">מתחברים עם חשבון Google כדי לשמור את הנתונים בדרייב שלכם ולעבוד מכל מכשיר.</div>
+        <button class="gbtn" id="signinBtn">${iconSvg("upload",16)}<span>התחברות עם Google</span></button>
+        <div class="error-box">${iconSvg("alert",15)}<span>${app.authError}</span></div>
+      </div>`;
+    document.getElementById("signinBtn").onclick = () => tokenClient.requestAccessToken();
+    return;
+  }
+
+  if (!app.signedIn) {
+    root.innerHTML = `
+      <div class="signin-screen">
+        <div class="signin-title">מעקב הכנסות והוצאות חודשי</div>
+        <div class="signin-sub">מתחברים עם חשבון Google כדי לשמור את הנתונים בקובץ בדרייב שלכם, ולהמשיך לעבוד מכל מכשיר עם אותו חשבון.</div>
+        <button class="gbtn" id="signinBtn" ${app.loading ? "disabled" : ""}>
+          ${app.loading ? `<span class="spin">${iconSvg("history",16)}</span><span>מתחבר…</span>` : `${iconSvg("upload",16)}<span>התחברות עם Google</span>`}
+        </button>
+      </div>`;
+    document.getElementById("signinBtn").onclick = () => tokenClient.requestAccessToken();
+    return;
+  }
+
+  const month = currentMonth();
+  const totals = monthTotals(month);
+  const items = flatItems(month.sections);
+  const sortedMonths = Object.values(app.state.months).sort((a, b) => b.createdAt - a.createdAt);
+
+  let html = "";
+  html += `<div class="header">
+    <div style="flex:1;min-width:0;">
+      <div class="eyebrow">מעקב חודשי</div>
+      <input class="month-input" id="monthLabelInput" value="${escapeAttr(month.monthLabel)}" />
+    </div>
+    <div class="header-actions">
+      <button class="save-btn" id="saveNowBtn">${app.saveState === "saving" ? `<span class="spin">${iconSvg("history",14)}</span>` : iconSvg("save",14)}<span>שמור</span></button>
+      <div class="save-indicator">
+        ${app.saveState === "saved" ? iconSvg("check",12) + `<span>נשמר${app.lastSavedAt ? " · " + new Date(app.lastSavedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"}) : ""}</span>` : ""}
+        ${app.saveState === "saving" ? "<span>שומר…</span>" : ""}
+      </div>
+    </div>
+  </div>`;
+  html += `<div class="account-row"><span>מחובר לחשבון Google · הנתונים נשמרים ב-Drive שלכם</span><button class="signout-link" id="signoutBtn">התנתקות</button></div>`;
+
+  html += `<div class="month-bar">
+    <button class="ghost-btn" id="toggleHistoryBtn">${iconSvg("history",14)}<span>היסטוריית חודשים (${sortedMonths.length})</span>${iconSvg("chevron",13)}</button>
+    <button class="ghost-btn" id="toggleNewMonthBtn">${iconSvg("calplus",14)}<span>חודש חדש</span></button>
+  </div>`;
+
+  if (app.showNewMonth) {
+    html += `<div class="new-month-box">
+      <input class="sel-input" id="newMonthLabelInput" style="flex:1" placeholder="שם החודש, למשל ספטמבר 2026" value="${escapeAttr(app.newMonthLabel)}" />
+      <button class="btn-sm-confirm" id="createMonthBtn">צור</button>
+      <button class="btn-sm-cancel" id="cancelNewMonthBtn">ביטול</button>
+    </div>
+    <div class="new-month-hint">שמות השורות מהחודש הנוכחי יועתקו לחודש החדש, עם סכום 0 להתחלה.</div>`;
+  }
+
+  if (app.showHistory) {
+    html += `<div class="history-panel">`;
+    sortedMonths.forEach((m) => {
+      const t = monthTotals(m);
+      const isCurrent = m.id === app.state.currentMonthId;
+      html += `<div class="history-row ${isCurrent ? "active" : ""}" data-month-id="${m.id}">
+        <div class="history-label">${escapeHtml(m.monthLabel)}${isCurrent ? `<span class="history-badge">פעיל</span>` : ""}</div>
+        <div class="history-nums">
+          <span style="color:var(--income)">₪${fmt(t.income)}</span>
+          <span style="color:var(--variable)">₪${fmt(t.outflow)}</span>
+          <span style="color:${t.remaining >= 0 ? "var(--income)" : "var(--debt)"};font-weight:600">₪${fmt(t.remaining)}</span>
+        </div>
+      </div>`;
+    });
+    html += `<div class="history-legend">הכנסות · יצא · נשאר לי</div></div>`;
+  }
+
+  html += `<div class="overview">
+    ${statBlock("הכנסות", totals.income, "var(--income)")}
+    ${statBlock("יצא", totals.outflow, "var(--variable)")}
+    ${statBlock("נשאר לי", totals.remaining, totals.remaining >= 0 ? "var(--income)" : "var(--debt)", true)}
+  </div>`;
+
+  html += `<button class="import-btn" id="importBtn" ${app.importing ? "disabled" : ""}>
+    ${app.importing ? `<span class="spin">${iconSvg("history",15)}</span><span>קורא קובץ…</span>` : iconSvg("upload",15) + "<span>ייבוא פירוט חיובים מכרטיס אשראי</span>"}
+  </button>`;
+
+  if (app.importState && app.importState.error) {
+    html += `<div class="error-box" style="max-width:none;margin-bottom:16px;">${iconSvg("alert",15)}<span>${escapeHtml(app.importState.error)}</span><button class="close-btn" id="dismissErrorBtn" style="margin-right:auto">${iconSvg("x",14)}</button></div>`;
+  }
+
+  Object.entries(SECTION_META).forEach(([key, meta]) => {
+    html += sectionHtml(key, meta, month.sections[key]);
+  });
+
+  html += `<div class="footer-note">העריכה נשמרת אוטומטית בדרייב, ואפשר גם ללחוץ "שמור" בכל רגע לביטחון נוסף. כל חודש נשמר בנפרד — אפשר לעבור בין חודשים או לפתוח חודש חדש דרך הסרגל למעלה.</div>`;
+
+  if (app.importState && !app.importState.error) {
+    html += importModalHtml(app.importState, items);
+  }
+
+  root.innerHTML = html;
+  attachHandlers(items);
+}
+
+function statBlock(label, value, color, emph) {
+  return `<div class="stat-block ${emph ? "emph" : ""}">
+    <div class="stat-label">${label}</div>
+    <div class="stat-value" style="color:${color}">₪${fmt(value)}</div>
+  </div>`;
+}
+
+function sectionHtml(key, meta, items) {
+  const total = sectionTotal(items);
+  let rows = "";
+  items.forEach((it) => {
+    rows += `<div class="row" data-item-id="${it.id}">
+      <input class="name-input" data-field="name" data-section="${key}" data-id="${it.id}" placeholder="שם השורה" value="${escapeAttr(it.name)}" />
+      <input class="num-input" type="number" data-field="amount" data-section="${key}" data-id="${it.id}" value="${it.amount}" />
+      <button class="del-btn" data-action="remove" data-section="${key}" data-id="${it.id}">${iconSvg("x",14)}</button>
+    </div>`;
+  });
+  return `<div class="section" style="border-inline-start-color:${meta.accent}">
+    <div class="section-header">
+      <div class="section-title-row"><span class="section-dot" style="background:${meta.accent}"></span><span class="section-title">${meta.title}</span></div>
+      <div class="section-total">₪${fmt(total)}</div>
+    </div>
+    <div class="col-labels"><span class="item-col">${meta.itemLabel}</span><span class="num-col">סכום</span><span style="width:22px"></span></div>
+    ${rows}
+    <button class="add-btn" data-action="add" data-section="${key}">${iconSvg("plus",14)}<span>הוסף שורה</span></button>
+  </div>`;
+}
+
+function categorySelectHtml(merchant, value, items) {
+  let html = `<select class="cat-select" data-merchant="${escapeAttr(merchant)}">
+    <option value="" ${!value ? "selected" : ""} disabled>בחרו שורה…</option>
+    <option value="ignore" ${value === "ignore" ? "selected" : ""}>— התעלם —</option>
+    <optgroup label="שורה חדשה">`;
+  Object.entries(SECTION_META).forEach(([key, meta]) => {
+    html += `<option value="new:${key}" ${value === "new:" + key ? "selected" : ""}>+ שורה חדשה ב${meta.title}</option>`;
+  });
+  html += `</optgroup>`;
+  Object.keys(SECTION_META).forEach((key) => {
+    const secItems = items.filter((it) => it.sectionKey === key);
+    if (!secItems.length) return;
+    html += `<optgroup label="${SECTION_META[key].title}">`;
+    secItems.forEach((it) => { html += `<option value="${it.id}" ${value === it.id ? "selected" : ""}>${escapeHtml(it.name)}</option>`; });
+    html += `</optgroup>`;
+  });
+  html += `</select>`;
+  return html;
+}
+
+function importModalHtml(importState, items) {
+  const { merchants, txCount, mapping, mode, fileName } = importState;
+  const names = Object.keys(merchants).sort((a, b) => {
+    const aKnown = mapping[a] ? 1 : 0, bKnown = mapping[b] ? 1 : 0;
+    if (aKnown !== bKnown) return aKnown - bKnown;
+    return merchants[b].total - merchants[a].total;
+  });
+  const total = names.reduce((s, n) => s + merchants[n].total, 0);
+  const classifiedCount = names.filter((n) => mapping[n] && mapping[n] !== "ignore").length;
+  const needsAttention = names.filter((n) => !mapping[n]).length;
+
+  let rows = "";
+  names.forEach((merchant) => {
+    const remembered = app.state.merchantMap[merchant];
+    const isKnown = !!(remembered && (remembered.itemName || remembered.ignored));
+    rows += `<div class="map-row">
+      <div class="map-cat-col">
+        <div class="map-cat-name" title="${escapeAttr(merchant)}">${escapeHtml(merchant)}${isKnown ? `<span class="known-icon">${iconSvg("sparkles",11)}</span>` : ""}</div>
+        <div class="map-cat-sum">₪${fmt(merchants[merchant].total)} · ${merchants[merchant].count} עסקאות</div>
+      </div>
+      <div class="map-select-col">${categorySelectHtml(merchant, mapping[merchant] || "", items)}</div>
+    </div>`;
+  });
+
+  return `<div class="modal-overlay" id="importOverlay">
+    <div class="modal">
+      <div class="modal-header"><div class="modal-title">סיווג עסקים מהקובץ</div><button class="close-btn" id="closeImportBtn">${iconSvg("x",16)}</button></div>
+      <div class="modal-sub">${escapeHtml(fileName)} · ${txCount} עסקאות · ${names.length} בתי עסק · סה"כ ₪${fmt(total)}</div>
+      ${needsAttention > 0 ? `<div class="needs-attention">${iconSvg("alert",13)}<span>${needsAttention} בתי עסק חדשים לסיווג</span></div>` : ""}
+      <div class="mode-row">
+        <span class="mode-label">איך לעדכן את הסכום בשורות שנבחרו:</span>
+        <div class="mode-toggle">
+          <button class="mode-btn ${mode === "add" ? "active" : ""}" data-mode="add">להוסיף לקיים</button>
+          <button class="mode-btn ${mode === "replace" ? "active" : ""}" data-mode="replace">להחליף את הקיים</button>
+        </div>
+      </div>
+      <div class="map-list">${rows}</div>
+      <div class="modal-footer">
+        <button class="btn-cancel" id="cancelImportBtn">ביטול</button>
+        <button class="btn-confirm" id="confirmImportBtn">עדכן ${classifiedCount > 0 ? classifiedCount + " שורות" : ""}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+function attachHandlers(items) {
+  const monthLabelInput = document.getElementById("monthLabelInput");
+  if (monthLabelInput) monthLabelInput.addEventListener("change", (e) => setMonthLabel(e.target.value));
+
+  const saveNowBtn = document.getElementById("saveNowBtn");
+  if (saveNowBtn) saveNowBtn.onclick = saveNow;
+
+  const signoutBtn = document.getElementById("signoutBtn");
+  if (signoutBtn) signoutBtn.onclick = () => {
+    if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+    accessToken = null; app.signedIn = false; app.state = null; driveFileId = null;
+    render();
+  };
+
+  const toggleHistoryBtn = document.getElementById("toggleHistoryBtn");
+  if (toggleHistoryBtn) toggleHistoryBtn.onclick = () => { app.showHistory = !app.showHistory; app.showNewMonth = false; render(); };
+
+  const toggleNewMonthBtn = document.getElementById("toggleNewMonthBtn");
+  if (toggleNewMonthBtn) toggleNewMonthBtn.onclick = () => { app.showNewMonth = !app.showNewMonth; app.showHistory = false; render(); };
+
+  const newMonthLabelInput = document.getElementById("newMonthLabelInput");
+  if (newMonthLabelInput) {
+    newMonthLabelInput.addEventListener("input", (e) => { app.newMonthLabel = e.target.value; });
+    newMonthLabelInput.focus();
+  }
+  const createMonthBtn = document.getElementById("createMonthBtn");
+  if (createMonthBtn) createMonthBtn.onclick = createNewMonth;
+  const cancelNewMonthBtn = document.getElementById("cancelNewMonthBtn");
+  if (cancelNewMonthBtn) cancelNewMonthBtn.onclick = () => { app.showNewMonth = false; render(); };
+
+  document.querySelectorAll(".history-row").forEach((row) => {
+    row.onclick = () => switchMonth(row.getAttribute("data-month-id"));
+  });
+
+  const importBtn = document.getElementById("importBtn");
+  if (importBtn) importBtn.onclick = () => document.getElementById("fileInput").click();
+
+  const dismissErrorBtn = document.getElementById("dismissErrorBtn");
+  if (dismissErrorBtn) dismissErrorBtn.onclick = () => { app.importState = null; render(); };
+
+  document.querySelectorAll('.name-input, .num-input').forEach((input) => {
+    input.addEventListener("change", (e) => {
+      const { section, id, field } = e.target.dataset;
+      const value = field === "amount" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value;
+      updateItem(section, id, field, value);
+    });
+  });
+  document.querySelectorAll('[data-action="remove"]').forEach((btn) => {
+    btn.onclick = () => removeItem(btn.dataset.section, btn.dataset.id);
+  });
+  document.querySelectorAll('[data-action="add"]').forEach((btn) => {
+    btn.onclick = () => addItem(btn.dataset.section);
+  });
+
+  // import modal
+  const closeImportBtn = document.getElementById("closeImportBtn");
+  if (closeImportBtn) closeImportBtn.onclick = cancelImport;
+  const cancelImportBtn = document.getElementById("cancelImportBtn");
+  if (cancelImportBtn) cancelImportBtn.onclick = cancelImport;
+  const confirmImportBtn = document.getElementById("confirmImportBtn");
+  if (confirmImportBtn) confirmImportBtn.onclick = confirmImport;
+  document.querySelectorAll(".mode-btn").forEach((btn) => { btn.onclick = () => setImportMode(btn.dataset.mode); });
+  document.querySelectorAll(".cat-select").forEach((sel) => { sel.onchange = () => setMapping(sel.dataset.merchant, sel.value); });
+}
+
+document.getElementById("fileInput").addEventListener("change", onFileSelected);
+
+window.addEventListener("load", () => {
+  const waitForGis = setInterval(() => {
+    if (gisReady()) {
+      clearInterval(waitForGis);
+      initTokenClient();
+      render();
+    }
+  }, 50);
+});
+
+render();
+</script>
+</body>
+</html>
